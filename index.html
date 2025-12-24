@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Scavenger Hunt</title>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      margin: 24px;
+      max-width: 1100px;
+    }
+    h1,h2 { margin: 0.3rem 0; }
+    .muted { color: #555; }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 14px 0;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    input, button {
+      font-size: 16px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #bbb;
+    }
+    button { cursor: pointer; }
+    .badge {
+      display:inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      border: 1px solid #ccc;
+      font-size: 13px;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .reveal {
+      background: #f7f7ff;
+      border: 1px dashed #aaa;
+      padding: 12px;
+      border-radius: 12px;
+    }
+    .locked { filter: blur(6px); user-select: none; }
+
+    /* Wordle */
+    .grid5 { display:grid; grid-template-columns: repeat(5, 44px); gap:6px; margin-top:10px; }
+    .tile {
+      width:44px; height:44px;
+      display:flex; align-items:center; justify-content:center;
+      font-weight:700; border-radius:10px;
+      border:1px solid #ccc;
+      text-transform:uppercase;
+    }
+    .g { background:#59c15a; border-color:#3aa83a; }
+    .y { background:#f0cd4e; border-color:#d1b33b; }
+    .x { background:#c9c9c9; border-color:#aaa; }
+
+    /* Memory (bigger) */
+    .miniGrid {
+      display:grid;
+      grid-template-columns: repeat(6, 62px);
+      gap:10px;
+      margin-top:12px;
+    }
+    .miniCell {
+      width:62px; height:62px;
+      border:1px solid #ccc;
+      border-radius:14px;
+      display:flex; align-items:center; justify-content:center;
+      font-size:22px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .miniCell.revealed { background:#eee; }
+    .miniCell.matched { background:#59c15a; border-color:#3aa83a; cursor:default; }
+
+    /* Word Search */
+    .wsWrap { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; margin-top:10px; }
+    .wsGrid {
+      display:grid;
+      grid-template-columns: repeat(12, 34px);
+      gap:6px;
+      user-select:none;
+    }
+    .wsCell {
+      width:34px; height:34px;
+      border:1px solid #ccc;
+      border-radius:10px;
+      display:flex; align-items:center; justify-content:center;
+      font-weight:700;
+      text-transform:uppercase;
+      cursor:pointer;
+    }
+    .wsCell.sel { background:#eef2ff; border-color:#9aa5ff; }
+    .wsCell.found { background:#59c15a; border-color:#3aa83a; cursor:default; }
+    .wsWords { min-width: 220px; }
+    .wsWords ul { padding-left: 18px; margin: 8px 0 0; }
+    .wsWords li { margin: 6px 0; }
+    .wsWords li.done { text-decoration: line-through; color: #0a7a0a; font-weight: 600; }
+  </style>
+</head>
+
+<body>
+<h1>🧩Christmas Gift for Sweetie</h1>
+<p class="muted">Solve each game to earn a fragment. Combine them to unlock your gift.</p>
+
+<!-- GAME 1 -->
+<div class="card">
+  <h2>Game 1: Wordle-lite</h2>
+  <p class="muted">Guess the 5-letter word. Unlimited tries; the board keeps your recent guesses.</p>
+  <div class="row">
+    <input id="wordleGuess" maxlength="5" placeholder="5 letters" />
+    <button id="wordleSubmit">Guess</button>
+    <span id="wordleStatus" class="badge">unsolved</span>
+  </div>
+  <div id="wordleBoard"></div>
+  <div id="wordleFragmentBox" class="reveal" style="display:none; margin-top:12px;">
+    Fragment: <span id="wordleFragment" class="mono"></span>
+  </div>
+</div>
+
+<!-- GAME 2 -->
+<div class="card">
+  <h2>Game 2: Riddle</h2>
+  <p class="muted">What can you catch but not throw?</p>
+  <div class="row">
+    <input id="riddleAnswer" placeholder="answer" />
+    <button id="riddleSubmit">Check</button>
+    <span id="riddleStatus" class="badge">unsolved</span>
+  </div>
+  <div id="riddleFragmentBox" class="reveal" style="display:none; margin-top:12px;">
+    Fragment: <span id="riddleFragment" class="mono"></span>
+  </div>
+</div>
+
+<!-- GAME 3 -->
+<div class="card">
+  <h2>Game 3: Sequence</h2>
+  <p class="muted">
+    Find the next term:
+    <span class="mono">2, 3, 5, 9, 17, ?</span>
+    <br/>
+    <span class="muted">Hint: look at the differences (and how they change).</span>
+  </p>
+  <div class="row">
+    <input id="comboAnswer" inputmode="numeric" placeholder="next number" />
+    <button id="comboSubmit">Unlock</button>
+    <span id="comboStatus" class="badge">unsolved</span>
+  </div>
+  <div id="comboFragmentBox" class="reveal" style="display:none; margin-top:12px;">
+    Fragment: <span id="comboFragment" class="mono"></span>
+  </div>
+</div>
+
+<!-- GAME 4 (WORD SEARCH) -->
+<div class="card">
+  <h2>Game 4: Word Search</h2>
+  <p class="muted">
+    Click letters to select a straight line (horizontal / vertical / diagonal), then press “Submit selection”.
+    Found words will cross off the list.
+  </p>
+  <div class="wsWrap">
+    <div>
+      <div id="wsGrid" class="wsGrid"></div>
+      <div class="row" style="margin-top:10px;">
+        <button id="wsSubmit">Submit selection</button>
+        <button id="wsClear">Clear</button>
+        <span id="wsStatus" class="badge">0 / 4 found</span>
+      </div>
+    </div>
+    <div class="wsWords">
+      <div class="badge">Words to find</div>
+      <ul id="wsWordList"></ul>
+      <div id="wsFragmentBox" class="reveal" style="display:none; margin-top:12px;">
+        Fragment: <span id="wsFragment" class="mono"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GAME 5 (LARGER MEMORY) -->
+<div class="card">
+  <h2>Game 5: Memory</h2>
+  <p class="muted">Match all pairs to earn the fragment.</p>
+  <span id="memoryStatus" class="badge">0 / 9 pairs</span>
+  <div id="memoryGrid" class="miniGrid"></div>
+  <div id="memoryFragmentBox" class="reveal" style="display:none; margin-top:12px;">
+    Fragment: <span id="memoryFragment" class="mono"></span>
+  </div>
+</div>
+
+<!-- UNLOCK -->
+<div class="card">
+  <h2>Unlock</h2>
+  <p class="muted">Password format: <span class="mono">FRAG1-FRAG2-FRAG3-FRAG4-FRAG5</span></p>
+  <div class="row">
+    <!-- Placeholder intentionally unrelated to the real code -->
+    <input id="finalPassword" placeholder="e.g., PINE-ALTO-7QZ-MOON-RIVR" />
+    <button id="unlockBtn">Unlock</button>
+    <span id="unlockStatus" class="badge">locked</span>
+  </div>
+  <div id="giftBox" class="reveal locked" style="margin-top:12px;">
+    <div id="giftText"></div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  /**********************
+   * CONFIG (edit these)
+   **********************/
+  const WORDLE_SECRET = "crane";
+  const WORDLE_FRAGMENT = "AX7";
+
+  // Riddle: accept "cold" (and a couple variants)
+  const RIDDLE_ACCEPT = ["a cold", "cold"];
+  const RIDDLE_FRAGMENT = "MINT";
+
+  // Harder sequence: differences double (1,2,4,8,...) so next is 17+16 = 33
+  const COMBO_SECRET = "33";
+  const COMBO_FRAGMENT = "NOVA";
+
+  // Word search
+  const WS_WORDS = ["ROSE", "STAR", "MAP", "GIFT"]; // must match placements below
+  const WS_FRAGMENT = "ROSE";
+
+  // Memory
+  const MEMORY_FRAGMENT = "KITE";
+
+  const FINAL_PASSWORD =
+    `${WORDLE_FRAGMENT}-${RIDDLE_FRAGMENT}-${COMBO_FRAGMENT}-${WS_FRAGMENT}-${MEMORY_FRAGMENT}`;
+
+  const GIFT_MESSAGE = `You unlocked the gift 🎁
+
+Merry Christmas SweetiePoo! 
+  Your gift is a weekend Spa Retreat with me at this magical winter place: https://stoweflake.com/
+  Loves you! ♥
+`;
+
+  /**********************
+   * Game 1: Wordle-lite (unlimited)
+   **********************/
+  const board = document.getElementById("wordleBoard");
+  const wordleGuess = document.getElementById("wordleGuess");
+  const wordleSubmit = document.getElementById("wordleSubmit");
+  const wordleStatus = document.getElementById("wordleStatus");
+
+  const wstate = { rows: [], maxRows: 12, solved: false };
+
+  function scoreWordle(guess, secret) {
+    const r = Array(5).fill("x");
+    const S = secret.split(""), G = guess.split("");
+    for (let i=0;i<5;i++) if (G[i] === S[i]) { r[i]="g"; S[i]=null; G[i]=null; }
+    for (let i=0;i<5;i++) {
+      if (!G[i]) continue;
+      const j = S.indexOf(G[i]);
+      if (j !== -1) { r[i]="y"; S[j]=null; }
+    }
+    return r;
+  }
+
+  function renderWordle() {
+    board.innerHTML = "";
+    wstate.rows.forEach(row => {
+      const d = document.createElement("div");
+      d.className = "grid5";
+      row.g.split("").forEach((c,i) => {
+        const t = document.createElement("div");
+        t.className = "tile " + row.m[i];
+        t.textContent = c;
+        d.appendChild(t);
+      });
+      board.appendChild(d);
+    });
+  }
+
+  function addWordleGuess(g) {
+    const m = scoreWordle(g, WORDLE_SECRET);
+    wstate.rows.push({ g, m });
+    if (wstate.rows.length > wstate.maxRows) wstate.rows.shift();
+    renderWordle();
+
+    if (g === WORDLE_SECRET) {
+      wstate.solved = true;
+      document.getElementById("wordleFragment").textContent = WORDLE_FRAGMENT;
+      document.getElementById("wordleFragmentBox").style.display = "block";
+      wordleStatus.textContent = "solved ✅";
+    } else {
+      wordleStatus.textContent = "keep guessing";
+    }
+  }
+
+  wordleSubmit.addEventListener("click", () => {
+    if (wstate.solved) return;
+    const g = wordleGuess.value.trim().toLowerCase();
+    if (!/^[a-z]{5}$/.test(g)) { wordleStatus.textContent = "enter 5 letters"; return; }
+    addWordleGuess(g);
+    wordleGuess.value = "";
+    wordleGuess.focus();
+  });
+
+  wordleGuess.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") wordleSubmit.click();
+  });
+
+  /**********************
+   * Game 2: Riddle
+   **********************/
+  const riddleAnswer = document.getElementById("riddleAnswer");
+  const riddleSubmit = document.getElementById("riddleSubmit");
+  const riddleStatus = document.getElementById("riddleStatus");
+
+  riddleSubmit.addEventListener("click", () => {
+    const a = riddleAnswer.value.trim().toLowerCase();
+    if (RIDDLE_ACCEPT.includes(a)) {
+      document.getElementById("riddleFragment").textContent = RIDDLE_FRAGMENT;
+      document.getElementById("riddleFragmentBox").style.display = "block";
+      riddleStatus.textContent = "solved ✅";
+    } else {
+      riddleStatus.textContent = "nope";
+    }
+  });
+
+  riddleAnswer.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") riddleSubmit.click();
+  });
+
+  /**********************
+   * Game 3: Sequence (harder)
+   **********************/
+  const comboAnswer = document.getElementById("comboAnswer");
+  const comboSubmit = document.getElementById("comboSubmit");
+  const comboStatus = document.getElementById("comboStatus");
+
+  comboSubmit.addEventListener("click", () => {
+    const a = comboAnswer.value.trim();
+    if (a === COMBO_SECRET) {
+      document.getElementById("comboFragment").textContent = COMBO_FRAGMENT;
+      document.getElementById("comboFragmentBox").style.display = "block";
+      comboStatus.textContent = "unlocked ✅";
+    } else {
+      comboStatus.textContent = "wrong";
+    }
+  });
+
+  comboAnswer.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") comboSubmit.click();
+  });
+
+  /**********************
+   * Game 4: Word Search
+   **********************/
+  const wsSize = 12;
+  const wsGridEl = document.getElementById("wsGrid");
+  const wsSubmit = document.getElementById("wsSubmit");
+  const wsClear = document.getElementById("wsClear");
+  const wsStatus = document.getElementById("wsStatus");
+  const wsWordList = document.getElementById("wsWordList");
+
+  function randLetter() {
+    const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    return A[Math.floor(Math.random() * A.length)];
+  }
+
+  const wsGrid = Array.from({length: wsSize}, () => Array.from({length: wsSize}, () => randLetter()));
+
+  function placeWord(word, r, c, dr, dc) {
+    for (let k=0;k<word.length;k++) wsGrid[r + dr*k][c + dc*k] = word[k];
+  }
+  placeWord("ROSE", 1, 1, 0, 1);
+  placeWord("STAR", 4, 9, 1, 0);
+  placeWord("MAP",  9, 1, 1, 1);
+  placeWord("GIFT", 11, 11, 0, -1);
+
+  const wsFound = new Set();
+  function renderWordList() {
+    wsWordList.innerHTML = "";
+    WS_WORDS.forEach(w => {
+      const li = document.createElement("li");
+      li.textContent = w;
+      if (wsFound.has(w)) li.classList.add("done");
+      wsWordList.appendChild(li);
+    });
+  }
+  renderWordList();
+
+  let wsSelected = []; // array of {r,c,el}
+
+  function clearSelection() {
+    wsSelected.forEach(x => x.el.classList.remove("sel"));
+    wsSelected = [];
+  }
+
+  function updateWsStatus() {
+    wsStatus.textContent = `${wsFound.size} / ${WS_WORDS.length} found`;
+    if (wsFound.size === WS_WORDS.length) {
+      document.getElementById("wsFragment").textContent = WS_FRAGMENT;
+      document.getElementById("wsFragmentBox").style.display = "block";
+    }
+  }
+
+  function isStraightLine(coords) {
+    if (coords.length < 2) return null;
+    const [a,b] = coords;
+    const dr = Math.sign(b.r - a.r);
+    const dc = Math.sign(b.c - a.c);
+    if (dr === 0 && dc === 0) return null;
+    for (let i=1;i<coords.length;i++) {
+      const prev = coords[i-1], cur = coords[i];
+      if (cur.r - prev.r !== dr || cur.c - prev.c !== dc) return null;
+    }
+    return {dr, dc};
+  }
+
+  function readSelectionString(coords) {
+    return coords.map(x => wsGrid[x.r][x.c]).join("");
+  }
+
+  function sortAlongLine(coords, dr, dc) {
+    return coords.slice().sort((p,q) => (p.r*dr + p.c*dc) - (q.r*dr + q.c*dc));
+  }
+
+  function markFound(coords) {
+    coords.forEach(x => {
+      x.el.classList.remove("sel");
+      x.el.classList.add("found");
+    });
+  }
+
+  wsGridEl.innerHTML = "";
+  for (let r=0;r<wsSize;r++) {
+    for (let c=0;c<wsSize;c++) {
+      const cell = document.createElement("div");
+      cell.className = "wsCell";
+      cell.textContent = wsGrid[r][c];
+
+      cell.addEventListener("click", () => {
+        if (cell.classList.contains("found")) return;
+        const idx = wsSelected.findIndex(x => x.r === r && x.c === c);
+        if (idx !== -1) {
+          cell.classList.remove("sel");
+          wsSelected.splice(idx, 1);
+          return;
+        }
+        cell.classList.add("sel");
+        wsSelected.push({r, c, el: cell});
+      });
+
+      wsGridEl.appendChild(cell);
+    }
+  }
+
+  wsSubmit.addEventListener("click", () => {
+    if (wsSelected.length < 2) { clearSelection(); return; }
+
+    const dirs = [
+      {dr:0, dc:1}, {dr:0, dc:-1},
+      {dr:1, dc:0}, {dr:-1, dc:0},
+      {dr:1, dc:1}, {dr:-1, dc:-1},
+      {dr:1, dc:-1}, {dr:-1, dc:1},
+    ];
+
+    let matchedWord = null;
+    let matchedCoords = null;
+
+    for (const d of dirs) {
+      const ordered = sortAlongLine(wsSelected, d.dr, d.dc);
+      if (!isStraightLine(ordered)) continue;
+
+      const s = readSelectionString(ordered);
+      const srev = s.split("").reverse().join("");
+
+      for (const w of WS_WORDS) {
+        if (wsFound.has(w)) continue;
+        if (s === w || srev === w) {
+          matchedWord = w;
+          matchedCoords = ordered;
+          break;
+        }
+      }
+      if (matchedWord) break;
+    }
+
+    if (matchedWord) {
+      wsFound.add(matchedWord);
+      renderWordList();
+      markFound(matchedCoords);
+      clearSelection();
+      updateWsStatus();
+    } else {
+      clearSelection();
+    }
+  });
+
+  wsClear.addEventListener("click", clearSelection);
+  updateWsStatus();
+
+  /**********************
+   * Game 5: Memory (bigger: 9 pairs = 18 tiles)
+   **********************/
+  const memoryGrid = document.getElementById("memoryGrid");
+  const memoryStatus = document.getElementById("memoryStatus");
+
+  const memSymbols = [
+    "🍀","🍀","🌙","🌙","🎲","🎲","🧁","🧁","🗺️","🗺️",
+    "🎁","🎁","🎧","🎧","⭐","⭐","🍓","🍓"
+  ].sort(() => Math.random() - 0.5);
+
+  let first = null;
+  let lock = false;
+  let matched = new Set();
+  let pairs = 0;
+
+  function updateMemoryStatus() {
+    memoryStatus.textContent = `${pairs} / 9 pairs`;
+    if (pairs === 9) {
+      document.getElementById("memoryFragment").textContent = MEMORY_FRAGMENT;
+      document.getElementById("memoryFragmentBox").style.display = "block";
+    }
+  }
+
+  memSymbols.forEach((sym, idx) => {
+    const cell = document.createElement("div");
+    cell.className = "miniCell";
+    cell.textContent = "•";
+
+    cell.addEventListener("click", () => {
+      if (lock) return;
+      if (matched.has(idx)) return;
+      if (cell.textContent !== "•") return;
+
+      cell.textContent = sym;
+      cell.classList.add("revealed");
+
+      if (!first) {
+        first = { idx, sym, cell };
+        return;
+      }
+
+      if (first.sym === sym) {
+        matched.add(idx);
+        matched.add(first.idx);
+
+        cell.classList.remove("revealed");
+        cell.classList.add("matched");
+        first.cell.classList.remove("revealed");
+        first.cell.classList.add("matched");
+
+        pairs++;
+        first = null;
+        updateMemoryStatus();
+      } else {
+        lock = true;
+        const prev = first;
+        first = null;
+        setTimeout(() => {
+          cell.textContent = "•";
+          prev.cell.textContent = "•";
+          cell.classList.remove("revealed");
+          prev.cell.classList.remove("revealed");
+          lock = false;
+        }, 650);
+      }
+    });
+
+    memoryGrid.appendChild(cell);
+  });
+
+  updateMemoryStatus();
+
+  /**********************
+   * Unlock
+   **********************/
+  const finalPassword = document.getElementById("finalPassword");
+  const unlockBtn = document.getElementById("unlockBtn");
+  const unlockStatus = document.getElementById("unlockStatus");
+  const giftBox = document.getElementById("giftBox");
+  const giftText = document.getElementById("giftText");
+
+  unlockBtn.addEventListener("click", () => {
+    const p = finalPassword.value.trim();
+    if (p === FINAL_PASSWORD) {
+      unlockStatus.textContent = "unlocked ✅";
+      giftBox.classList.remove("locked");
+      giftText.textContent = GIFT_MESSAGE;
+    } else {
+      unlockStatus.textContent = "wrong password";
+      giftBox.classList.add("locked");
+      giftText.textContent = "";
+    }
+  });
+
+  finalPassword.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") unlockBtn.click();
+  });
+
+});
+</script>
+</body>
+</html>
